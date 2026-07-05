@@ -18,9 +18,9 @@ kscreen-doctor
 
 ## Installation
 
-Copy script to location included in $PATH. For example:
-
 ```bash
+git clone https://github.com/lahdeero/kruutu.git
+cd kruutu
 cp kruutu /usr/local/bin
 ```
 
