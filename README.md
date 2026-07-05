@@ -21,7 +21,7 @@ kscreen-doctor
 Copy script to location included in $PATH. For example:
 
 ```bash
-cp kruutu /usr/bin
+cp kruutu /usr/local/bin
 ```
 
 ## Usage
