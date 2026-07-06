@@ -2,6 +2,22 @@
 
 errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
 
+tvsound() {
+    wpctl set-default alsa_output.pci-0000_09_00.1.hdmi-stereo-extra1
+    wpctl status | awk '/Streams:/,/Video/ { if ($1 ~ /^[0-9]+\./) print substr($1,1,length($1)-1) }' |
+        while read id; do
+            wpctl move-node "$id" @DEFAULT_AUDIO_SINK@
+        done
+}
+
+computersound() {
+    wpctl set-default alsa_output.pci-0000_0b_00.3.analog-stereo
+    wpctl status | awk '/Streams:/,/Video/ { if ($1 ~ /^[0-9]+\./) print substr($1,1,length($1)-1) }' |
+        while read id; do
+            wpctl move-node "$id" @DEFAULT_AUDIO_SINK@
+        done
+}
+
 case "$1" in
     1)
         echo "DVI-D-1 + DP-1 (extended). DP-1 is the primary display on the right."
@@ -12,6 +28,7 @@ case "$1" in
             output.DP-1.position.1920,0 \
             output.DP-1.primary \
             output.HDMI-A-1.disable
+        computersound
         ;;
     2)
         echo "DP-1 + HDMI-A-1 (mirrored)"
@@ -22,6 +39,7 @@ case "$1" in
             output.HDMI-A-1.enable \
             output.HDMI-A-1.position.0,0 \
             output.DVI-D-1.disable
+        tvsound
         ;;
     3)
         echo "DP-1 only"
@@ -31,6 +49,7 @@ case "$1" in
             output.DP-1.primary \
             output.DVI-D-1.disable \
             output.HDMI-A-1.disable
+        computersound
         ;;
     4)
         echo "HDMI-A-1 + DVI-D-1 + DP-1 (HDMI left, DVI middle, DP right)"
@@ -42,6 +61,7 @@ case "$1" in
             output.DP-1.enable \
             output.DP-1.position.4480,0 \
             output.DP-1.primary
+        computersound
         ;;
     *)
         echo "$errormsg"
