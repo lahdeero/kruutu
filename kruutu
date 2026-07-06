@@ -1,57 +1,50 @@
 #!/bin/bash
 
-arg=$1
-errormsg="Invalid usage. Use $0 {1,2,3,4}. For example $0 2"
-if [ -z "$arg" ]; then
-    echo $errormsg
-    exit 1
-fi
+errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
 
-if [ $arg -eq 1 ]; then
-    echo "DVI-D-1, DP-1 (extend). DP-1 Is main display on right hand side"
-    kscreen-doctor \
-    output.DVI-D-1.enable \
-    output.DVI-D-1.mode.48 \
-    output.DVI-D-1.position.0,0 \
-    output.DP-1.enable \
-    output.DP-1.mode.39 \
-    output.DP-1.position.1920,0 \
-    output.DP-1.primary \
-    output.HDMI-A-1.disable
-elif [ $arg -eq 2 ]; then
-    echo "DP-1, HDMI-A-1 (mirror)"
-    kscreen-doctor \
-    output.DP-1.enable \
-    output.DP-1.mode.39 \
-    output.DP-1.position.0,0 \
-    output.DP-1.primary \
-    output.HDMI-A-1.enable \
-    output.HDMI-A-1.mode.8 \
-    output.HDMI-A-1.position.0,0 \
-    output.DVI-D-1.disable
-elif [ $arg -eq 3 ]; then
-    echo "DP-1"
-    kscreen-doctor \
-    output.DP-1.enable \
-    output.DP-1.mode.39 \
-    output.DP-1.position.0,0 \
-    output.DP-1.primary \
-    output.DVI-D-1.disable \
-    output.HDMI-A-1.disable
-elif [ $arg -eq 4 ]; then
-    echo "HDMI-A-1, DVI-D-1, DP-1. HDMI-A-1 left side, DVI-D-1 middle and HDMI-A-1 right"
-    kscreen-doctor \
-    output.HDMI-A-1.enable \
-    output.HDMI-A-1.mode.8 \
-    output.HDMI-A-1.position.0,0 \
-    output.DVI-D-1.enable \
-    output.DVI-D-1.mode.48 \
-    output.DVI-D-1.position.2560,0 \
-    output.DP-1.enable \
-    output.DP-1.mode.39 \
-    output.DP-1.position.4480,0 \
-    output.DP-1.primary
-else
-    echo $errormsg
-    exit 1
-fi
+case "$1" in
+    1)
+        echo "DVI-D-1 + DP-1 (extended). DP-1 is the primary display on the right."
+        kscreen-doctor \
+            output.DVI-D-1.enable \
+            output.DVI-D-1.position.0,0 \
+            output.DP-1.enable \
+            output.DP-1.position.1920,0 \
+            output.DP-1.primary \
+            output.HDMI-A-1.disable
+        ;;
+    2)
+        echo "DP-1 + HDMI-A-1 (mirrored)"
+        kscreen-doctor \
+            output.DP-1.enable \
+            output.DP-1.position.0,0 \
+            output.DP-1.primary \
+            output.HDMI-A-1.enable \
+            output.HDMI-A-1.position.0,0 \
+            output.DVI-D-1.disable
+        ;;
+    3)
+        echo "DP-1 only"
+        kscreen-doctor \
+            output.DP-1.enable \
+            output.DP-1.position.0,0 \
+            output.DP-1.primary \
+            output.DVI-D-1.disable \
+            output.HDMI-A-1.disable
+        ;;
+    4)
+        echo "HDMI-A-1 + DVI-D-1 + DP-1 (HDMI left, DVI middle, DP right)"
+        kscreen-doctor \
+            output.HDMI-A-1.enable \
+            output.HDMI-A-1.position.0,0 \
+            output.DVI-D-1.enable \
+            output.DVI-D-1.position.2560,0 \
+            output.DP-1.enable \
+            output.DP-1.position.4480,0 \
+            output.DP-1.primary
+        ;;
+    *)
+        echo "$errormsg"
+        exit 1
+        ;;
+esac
