@@ -2,57 +2,78 @@
 
 CARD="alsa_card.pci-0000_09_00.1"
 
-errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
+find_profile() {
+    local monitor="$1"
+
+    pactl list cards |
+    awk -v mon="$monitor" '
+    $0 ~ "device.product.name = \"" mon "\"" {
+        found=1
+        next
+    }
+
+    found && /Part of profile/ {
+        match($0,/output:[^, ]+/)
+        print substr($0,RSTART,RLENGTH)
+        exit
+    }'
+}
 
 set_default_sink() {
     local pattern="$1"
     local sink
-    local streams
 
-    sink=$(wpctl status |
+    sink=$(
+        wpctl status |
         awk -v pat="$pattern" '
-            /Sinks:/,/Sources:/ {
-                if ($0 ~ pat) {
-                    match($0, /[0-9]+\./)
-                    print substr($0, RSTART, RLENGTH-1)
-                    exit
-                }
-            }')
+        /Sinks:/,/Sources:/ {
+            if ($0 ~ pat) {
+                match($0,/[0-9]+\./)
+                print substr($0,RSTART,RLENGTH-1)
+                exit
+            }
+        }'
+    )
 
-    [ -z "$sink" ] && {
-        echo "Could not find sink matching '$pattern'"
-        return 1
-    }
-
-    echo "Using sink $sink"
+    [ -z "$sink" ] && return 1
 
     wpctl set-default "$sink"
 
-    # Move existing playback streams to the new sink.
-    streams=$(wpctl status |
-        awk '
-            /Streams:/,/Video/ {
-                if ($1 ~ /^[0-9]+\.$/) {
-                    id=$1
-                    sub(/\./,"",id)
-                    print id
-                }
-            }')
-
-    for stream in $streams; do
+    wpctl status |
+    awk '
+    /Streams:/,/Video/ {
+        if ($1 ~ /^[0-9]+\.$/) {
+            gsub(/\./,"",$1)
+            print $1
+        }
+    }' |
+    while read -r stream; do
         wpctl move "$stream" "$sink" 2>/dev/null
     done
 }
 
 tvsound() {
-    pactl set-card-profile "$CARD" output:hdmi-stereo
+    local profile
+
+    profile=$(find_profile "S90D")
+
+    if [ -z "$profile" ]; then
+        echo "Could not find S90D HDMI profile."
+        return 1
+    fi
+
+    echo "Using TV profile: $profile"
+
+    pactl set-card-profile "$CARD" "$profile"
     sleep 1
-    set_default_sink "Digital Stereo \\(HDMI\\)"
+
+    set_default_sink "GB205 High Definition Audio Controller Digital Stereo"
 }
 
 computersound() {
-    pactl set-card-profile "$CARD" output:hdmi-stereo-extra1
-    sleep 1
+    pactl set-card-profile "$CARD" off
+    sleep 0.5
+
     set_default_sink "Family 17h .* Analog Stereo"
 }
 
