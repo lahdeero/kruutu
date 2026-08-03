@@ -20,60 +20,36 @@ find_profile() {
 }
 
 set_default_sink() {
-    local pattern="$1"
-    local sink
+    local sink_name="$1"
 
-    sink=$(
-        wpctl status |
-        awk -v pat="$pattern" '
+    local id
+    id=$(wpctl status | awk -v name="$sink_name" '
         /Sinks:/,/Sources:/ {
-            if ($0 ~ pat) {
-                match($0,/[0-9]+\./)
-                print substr($0,RSTART,RLENGTH-1)
+            if ($0 ~ name) {
+                match($0, /[0-9]+/)
+                print substr($0, RSTART, RLENGTH)
                 exit
             }
-        }'
-    )
+        }')
 
-    [ -z "$sink" ] && return 1
-
-    wpctl set-default "$sink"
-
-    wpctl status |
-    awk '
-    /Streams:/,/Video/ {
-        if ($1 ~ /^[0-9]+\.$/) {
-            gsub(/\./,"",$1)
-            print $1
-        }
-    }' |
-    while read -r stream; do
-        wpctl move "$stream" "$sink" 2>/dev/null
-    done
-}
-
-tvsound() {
-    local profile
-
-    profile=$(find_profile "S90D")
-
-    if [ -z "$profile" ]; then
-        echo "Could not find S90D HDMI profile."
+    if [ -z "$id" ]; then
+        echo "Could not find sink: $sink_name"
         return 1
     fi
 
-    echo "Using TV profile: $profile"
+    wpctl set-default "$id"
+}
 
-    pactl set-card-profile "$CARD" "$profile"
-    sleep 1
-
+tvsound() {
+    pactl set-card-profile "$CARD" output:hdmi-stereo-extra1
+    sleep 2
     set_default_sink "GB205 High Definition Audio Controller Digital Stereo"
 }
 
+
 computersound() {
     pactl set-card-profile "$CARD" off
-    sleep 0.5
-
+    sleep 1
     set_default_sink "Family 17h .* Analog Stereo"
 }
 
