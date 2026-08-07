@@ -1,56 +1,100 @@
 #!/bin/bash
 
 CARD="alsa_card.pci-0000_09_00.1"
+ANALOG_SINK="alsa_output.pci-0000_0b_00.3.analog-stereo"
+
+errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
 
 find_profile() {
     local monitor="$1"
 
     pactl list cards |
-    awk -v mon="$monitor" '
-    $0 ~ "device.product.name = \"" mon "\"" {
-        found=1
-        next
-    }
+        awk -v monitor="$monitor" '
+            /^[[:space:]]*hdmi-output-/ {
+                target = 0
+            }
 
-    found && /Part of profile/ {
-        match($0,/output:[^, ]+/)
-        print substr($0,RSTART,RLENGTH)
-        exit
-    }'
+            $0 ~ "device.product.name = \"" monitor "\"" {
+                target = 1
+            }
+
+            target && /Part of profile\(s\):/ {
+                if (match($0, /output\\?:hdmi-stereo(-extra[0-9]+)?/)) {
+                    profile = substr($0, RSTART, RLENGTH)
+                    gsub(/\\:/, ":", profile)
+                    print profile
+                    exit
+                }
+            }
+        '
+}
+
+wait_for_sink() {
+    local sink="$1"
+
+    for _ in {1..20}; do
+        if pactl list short sinks | awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
+            return 0
+        fi
+
+        sleep 0.2
+    done
+
+    echo "Sink did not appear: $sink"
+    return 1
 }
 
 set_default_sink() {
-    local sink_name="$1"
+    local sink="$1"
 
-    local id
-    id=$(wpctl status | awk -v name="$sink_name" '
-        /Sinks:/,/Sources:/ {
-            if ($0 ~ name) {
-                match($0, /[0-9]+/)
-                print substr($0, RSTART, RLENGTH)
-                exit
-            }
-        }')
-
-    if [ -z "$id" ]; then
-        echo "Could not find sink: $sink_name"
+    if ! wait_for_sink "$sink"; then
         return 1
     fi
 
-    wpctl set-default "$id"
+    echo "Using audio sink: $sink"
+
+    pactl set-default-sink "$sink"
+
+    # Move already-running applications to the new sink.
+    pactl list short sink-inputs |
+        awk '{print $1}' |
+        while read -r input; do
+            pactl move-sink-input "$input" "$sink" 2>/dev/null || true
+        done
 }
 
 tvsound() {
-    pactl set-card-profile "$CARD" output:hdmi-stereo-extra1
-    sleep 2
-    set_default_sink "GB205 High Definition Audio Controller Digital Stereo"
+    local profile
+    local sink
+
+    profile=$(find_profile "S90D")
+
+    if [ -z "$profile" ]; then
+        echo "Could not find HDMI audio profile for S90D"
+        return 1
+    fi
+
+    echo "S90D audio profile: $profile"
+
+    if ! pactl set-card-profile "$CARD" "$profile"; then
+        echo "Failed to activate S90D audio profile"
+        return 1
+    fi
+
+    # output:hdmi-stereo-extra1
+    # becomes:
+    # alsa_output.pci-0000_09_00.1.hdmi-stereo-extra1
+    sink="alsa_output.pci-0000_09_00.1.${profile#output:}"
+
+    set_default_sink "$sink"
 }
 
-
 computersound() {
-    pactl set-card-profile "$CARD" off
-    sleep 1
-    set_default_sink "Family 17h .* Analog Stereo"
+    # We never want audio from the ROG monitor, so disable
+    # NVIDIA audio completely when using the computer speakers.
+    pactl set-card-profile "$CARD" off 2>/dev/null || true
+
+    set_default_sink "$ANALOG_SINK"
 }
 
 disabletv() {
@@ -61,18 +105,21 @@ disabletv() {
 case "$1" in
     1)
         echo "DP-3 + DP-2 (extended). DP-2 is the primary display on the right."
+
         kscreen-doctor \
             output.DP-3.enable \
             output.DP-3.position.0,0 \
             output.DP-2.enable \
             output.DP-2.position.1920,0 \
             output.DP-2.primary
+
         disabletv
         computersound
         ;;
 
     2)
         echo "DP-2 + HDMI-A-1 (mirrored)"
+
         kscreen-doctor \
             output.DP-2.enable \
             output.DP-2.position.0,0 \
@@ -80,22 +127,26 @@ case "$1" in
             output.HDMI-A-1.enable \
             output.HDMI-A-1.position.0,0 \
             output.DP-3.disable
+
         tvsound
         ;;
 
     3)
         echo "DP-2 only"
+
         kscreen-doctor \
             output.DP-2.enable \
             output.DP-2.position.0,0 \
             output.DP-2.primary \
             output.DP-3.disable
+
         disabletv
         computersound
         ;;
 
     4)
         echo "HDMI-A-1 + DP-3 + DP-2 (HDMI left, DP-3 middle, DP-2 right)"
+
         kscreen-doctor \
             output.HDMI-A-1.enable \
             output.HDMI-A-1.position.0,0 \
@@ -104,6 +155,7 @@ case "$1" in
             output.DP-2.enable \
             output.DP-2.position.4480,0 \
             output.DP-2.primary
+
         computersound
         ;;
 
