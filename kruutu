@@ -66,27 +66,29 @@ set_default_sink() {
 tvsound() {
     local profile
     local sink
+    local attempt
 
-    profile=$(find_profile "S90D")
+    # HDMI audio discovery can lag behind enabling the TV picture.
+    # Retry discovery and activation until the TV sink is available.
+    for attempt in {1..40}; do
+        profile=$(find_profile "S90D")
 
-    if [ -z "$profile" ]; then
-        echo "Could not find HDMI audio profile for S90D"
-        return 1
-    fi
+        if [ -n "$profile" ] &&
+            pactl set-card-profile "$CARD" "$profile" 2>/dev/null; then
+            sink="alsa_output.pci-0000_09_00.1.${profile#output:}"
 
-    echo "S90D audio profile: $profile"
+            if pactl list short sinks | awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
+                echo "S90D audio profile: $profile"
+                set_default_sink "$sink"
+                return $?
+            fi
+        fi
 
-    if ! pactl set-card-profile "$CARD" "$profile"; then
-        echo "Failed to activate S90D audio profile"
-        return 1
-    fi
+        sleep 0.25
+    done
 
-    # output:hdmi-stereo-extra1
-    # becomes:
-    # alsa_output.pci-0000_09_00.1.hdmi-stereo-extra1
-    sink="alsa_output.pci-0000_09_00.1.${profile#output:}"
-
-    set_default_sink "$sink"
+    echo "S90D HDMI audio did not become ready within 10 seconds"
+    return 1
 }
 
 computersound() {
