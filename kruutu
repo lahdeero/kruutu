@@ -104,6 +104,13 @@ disabletv() {
     kscreen-doctor output.HDMI-A-1.disable >/dev/null 2>&1 || true
 }
 
+set_panel_hiding() {
+    local mode="$1"
+
+    qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+        "var p = panelById(57); if (p) { p.hiding = \"$mode\"; }"
+}
+
 case "$1" in
     1)
         echo "DP-3 + DP-2 (extended). DP-2 is the primary display on the right."
@@ -116,6 +123,7 @@ case "$1" in
             output.DP-2.primary
 
         disabletv
+        set_panel_hiding none
         computersound
         ;;
 
@@ -130,6 +138,7 @@ case "$1" in
             output.HDMI-A-1.position.0,0 \
             output.DP-3.disable
 
+        set_panel_hiding autohide
         tvsound
         ;;
 
@@ -143,6 +152,7 @@ case "$1" in
             output.DP-3.disable
 
         disabletv
+        set_panel_hiding none
         computersound
         ;;
 
@@ -158,6 +168,7 @@ case "$1" in
             output.DP-2.position.4480,0 \
             output.DP-2.primary
 
+        set_panel_hiding none
         computersound
         ;;
 
