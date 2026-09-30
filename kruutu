@@ -3,6 +3,10 @@
 CARD="alsa_card.pci-0000_09_00.1"
 ANALOG_SINK="alsa_output.pci-0000_0b_00.3.analog-stereo"
 
+MAIN="DP-3"
+SECONDARY="DP-2"
+TV="HDMI-A-1"
+
 errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
 
 find_profile() {
@@ -33,7 +37,8 @@ wait_for_sink() {
     local sink="$1"
 
     for _ in {1..20}; do
-        if pactl list short sinks | awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
+        if pactl list short sinks |
+            awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
             return 0
         fi
 
@@ -68,16 +73,20 @@ tvsound() {
     local sink
     local attempt
 
-    # HDMI audio discovery can lag behind enabling the TV picture.
-    # Retry discovery and activation until the TV sink is available.
+    # HDMI/ELD discovery can lag behind enabling the TV.
+    # Do not assume that S90D is hdmi-stereo or hdmi-stereo-extra1:
+    # determine its current profile dynamically.
     for attempt in {1..40}; do
         profile=$(find_profile "S90D")
 
         if [ -n "$profile" ] &&
             pactl set-card-profile "$CARD" "$profile" 2>/dev/null; then
+
             sink="alsa_output.pci-0000_09_00.1.${profile#output:}"
 
-            if pactl list short sinks | awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
+            if pactl list short sinks |
+                awk -v sink="$sink" '$2 == sink { found=1 } END { exit !found }'; then
+
                 echo "S90D audio profile: $profile"
                 set_default_sink "$sink"
                 return $?
@@ -92,35 +101,36 @@ tvsound() {
 }
 
 computersound() {
-    # We never want audio from the ROG monitor, so disable
-    # NVIDIA audio completely when using the computer speakers.
+    # Never use the ROG monitor for audio.
     pactl set-card-profile "$CARD" off 2>/dev/null || true
 
     set_default_sink "$ANALOG_SINK"
 }
 
 disabletv() {
-    echo "Disabling TV (HDMI-A-1)"
-    kscreen-doctor output.HDMI-A-1.disable >/dev/null 2>&1 || true
+    echo "Disabling TV ($TV)"
+    kscreen-doctor "output.$TV.disable" >/dev/null 2>&1 || true
 }
 
 set_panel_hiding() {
     local mode="$1"
 
-    qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+    qdbus6 org.kde.plasmashell \
+        /PlasmaShell \
+        org.kde.PlasmaShell.evaluateScript \
         "var p = panelById(57); if (p) { p.hiding = \"$mode\"; }"
 }
 
 case "$1" in
     1)
-        echo "DP-3 + DP-2 (extended). DP-2 is the primary display on the right."
+        echo "Secondary + main (extended). Main monitor is on the right."
 
         kscreen-doctor \
-            output.DP-3.enable \
-            output.DP-3.position.0,0 \
-            output.DP-2.enable \
-            output.DP-2.position.1920,0 \
-            output.DP-2.primary
+            "output.$SECONDARY.enable" \
+            "output.$SECONDARY.position.0,0" \
+            "output.$MAIN.enable" \
+            "output.$MAIN.position.1920,0" \
+            "output.$MAIN.primary"
 
         disabletv
         set_panel_hiding none
@@ -128,28 +138,28 @@ case "$1" in
         ;;
 
     2)
-        echo "DP-2 + HDMI-A-1 (mirrored)"
+        echo "Main + TV (mirrored)"
 
         kscreen-doctor \
-            output.DP-2.enable \
-            output.DP-2.position.0,0 \
-            output.DP-2.primary \
-            output.HDMI-A-1.enable \
-            output.HDMI-A-1.position.0,0 \
-            output.DP-3.disable
+            "output.$MAIN.enable" \
+            "output.$MAIN.position.0,0" \
+            "output.$MAIN.primary" \
+            "output.$TV.enable" \
+            "output.$TV.position.0,0" \
+            "output.$SECONDARY.disable"
 
         set_panel_hiding autohide
         tvsound
         ;;
 
     3)
-        echo "DP-2 only"
+        echo "Main monitor only"
 
         kscreen-doctor \
-            output.DP-2.enable \
-            output.DP-2.position.0,0 \
-            output.DP-2.primary \
-            output.DP-3.disable
+            "output.$MAIN.enable" \
+            "output.$MAIN.position.0,0" \
+            "output.$MAIN.primary" \
+            "output.$SECONDARY.disable"
 
         disabletv
         set_panel_hiding none
@@ -157,16 +167,16 @@ case "$1" in
         ;;
 
     4)
-        echo "HDMI-A-1 + DP-3 + DP-2 (HDMI left, DP-3 middle, DP-2 right)"
+        echo "TV + secondary + main (TV left, secondary middle, main right)"
 
         kscreen-doctor \
-            output.HDMI-A-1.enable \
-            output.HDMI-A-1.position.0,0 \
-            output.DP-3.enable \
-            output.DP-3.position.2560,0 \
-            output.DP-2.enable \
-            output.DP-2.position.4480,0 \
-            output.DP-2.primary
+            "output.$TV.enable" \
+            "output.$TV.position.0,0" \
+            "output.$SECONDARY.enable" \
+            "output.$SECONDARY.position.2560,0" \
+            "output.$MAIN.enable" \
+            "output.$MAIN.position.4480,0" \
+            "output.$MAIN.primary"
 
         set_panel_hiding none
         computersound
