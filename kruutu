@@ -3,9 +3,18 @@
 CARD="alsa_card.pci-0000_09_00.1"
 ANALOG_SINK="alsa_output.pci-0000_0b_00.3.analog-stereo"
 
-MAIN="DP-3"
-SECONDARY="DP-2"
-TV="HDMI-A-1"
+# Current display mapping:
+# DP-3     = main monitor (ROG PG279Q, 2560x1440@144)
+# DP-2     = secondary monitor (1920x1080@60)
+# HDMI-A-1 = TV (S90D)
+#
+# Known mode IDs:
+# DP-3:
+#   2  = 2560x1440@144
+#
+# HDMI-A-1:
+#   36 = 2560x1440@59.95
+#   39 = 1920x1080@60.00
 
 errormsg="Invalid usage. Use $0 {1,2,3,4}. For example: $0 2"
 
@@ -73,9 +82,7 @@ tvsound() {
     local sink
     local attempt
 
-    # HDMI/ELD discovery can lag behind enabling the TV.
-    # Do not assume that S90D is hdmi-stereo or hdmi-stereo-extra1:
-    # determine its current profile dynamically.
+    # HDMI audio discovery can lag behind enabling the TV picture.
     for attempt in {1..40}; do
         profile=$(find_profile "S90D")
 
@@ -101,15 +108,16 @@ tvsound() {
 }
 
 computersound() {
-    # Never use the ROG monitor for audio.
+    # Never use audio from the ROG monitor.
+    # Disable NVIDIA audio entirely when using computer speakers.
     pactl set-card-profile "$CARD" off 2>/dev/null || true
 
     set_default_sink "$ANALOG_SINK"
 }
 
 disabletv() {
-    echo "Disabling TV ($TV)"
-    kscreen-doctor "output.$TV.disable" >/dev/null 2>&1 || true
+    echo "Disabling TV (HDMI-A-1)"
+    kscreen-doctor output.HDMI-A-1.disable >/dev/null 2>&1 || true
 }
 
 set_panel_hiding() {
@@ -126,11 +134,11 @@ case "$1" in
         echo "Secondary + main (extended). Main monitor is on the right."
 
         kscreen-doctor \
-            "output.$SECONDARY.enable" \
-            "output.$SECONDARY.position.0,0" \
-            "output.$MAIN.enable" \
-            "output.$MAIN.position.1920,0" \
-            "output.$MAIN.primary"
+            output.DP-2.enable \
+            output.DP-2.position.0,0 \
+            output.DP-3.enable \
+            output.DP-3.position.1920,0 \
+            output.DP-3.primary
 
         disabletv
         set_panel_hiding none
@@ -139,14 +147,28 @@ case "$1" in
 
     2)
         echo "Main + TV (mirrored)"
+        echo "Preparing TV HDMI connection"
 
+        # The S90D sometimes rejects the desired resolution after the
+        # HDMI connection has been initialized. Switching it to 1080p60
+        # first reliably resets the link.
         kscreen-doctor \
-            "output.$MAIN.enable" \
-            "output.$MAIN.position.0,0" \
-            "output.$MAIN.primary" \
-            "output.$TV.enable" \
-            "output.$TV.position.0,0" \
-            "output.$SECONDARY.disable"
+            output.HDMI-A-1.enable \
+            output.HDMI-A-1.mode.39 \
+            output.HDMI-A-1.position.0,0
+
+        sleep 1
+
+        # Switch the TV to 1440p and put the main monitor at the same
+        # position, giving us the mirrored desktop.
+        kscreen-doctor \
+            output.HDMI-A-1.mode.36 \
+            output.HDMI-A-1.position.0,0 \
+            output.DP-3.enable \
+            output.DP-3.mode.2 \
+            output.DP-3.position.0,0 \
+            output.DP-3.primary \
+            output.DP-2.disable
 
         set_panel_hiding autohide
         tvsound
@@ -156,10 +178,10 @@ case "$1" in
         echo "Main monitor only"
 
         kscreen-doctor \
-            "output.$MAIN.enable" \
-            "output.$MAIN.position.0,0" \
-            "output.$MAIN.primary" \
-            "output.$SECONDARY.disable"
+            output.DP-3.enable \
+            output.DP-3.position.0,0 \
+            output.DP-3.primary \
+            output.DP-2.disable
 
         disabletv
         set_panel_hiding none
@@ -167,16 +189,16 @@ case "$1" in
         ;;
 
     4)
-        echo "TV + secondary + main (TV left, secondary middle, main right)"
+        echo "TV + secondary + main"
 
         kscreen-doctor \
-            "output.$TV.enable" \
-            "output.$TV.position.0,0" \
-            "output.$SECONDARY.enable" \
-            "output.$SECONDARY.position.2560,0" \
-            "output.$MAIN.enable" \
-            "output.$MAIN.position.4480,0" \
-            "output.$MAIN.primary"
+            output.HDMI-A-1.enable \
+            output.HDMI-A-1.position.0,0 \
+            output.DP-2.enable \
+            output.DP-2.position.2560,0 \
+            output.DP-3.enable \
+            output.DP-3.position.4480,0 \
+            output.DP-3.primary
 
         set_panel_hiding none
         computersound
