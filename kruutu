@@ -184,7 +184,7 @@ case "$1" in
             output.DP-2.disable
 
         disabletv
-        set_panel_hiding none
+        set_panel_hiding autohide
         computersound
         ;;
 
